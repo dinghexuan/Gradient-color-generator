@@ -220,15 +220,43 @@ export function generateNeutralLight(
     8: { s: -2, l: 9 },
     7: { s: -2, l: 18 },
     6: { s: 4, l: 14 },
-    5: { s: 4, l: 12 },
-    4: { s: 4, l: 5 },
-    3: { s: 4, l: 3 },
-    2: { s: 4, l: 2 },
   }
 
-  for (let index = 12; index >= 2; index -= 1) {
-    const next = adjustHsl(colors[index + 1], steps[index])
-    colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 86) } : next
+  for (let index = 12; index >= 6; index -= 1) {
+    colors[index] = adjustHsl(colors[index + 1], steps[index])
+  }
+
+  const fixedLightness =
+    base.l <= 5
+      ? [83, 89, 92, 94]
+      : base.l <= 10
+        ? [86, 92, 95, 97]
+        : base.l <= 15
+          ? [88, 93, 96, 98]
+          : base.l <= 20
+            ? [92, 96, 96, 98]
+            : null
+
+  if (fixedLightness) {
+    for (const [position, index] of [5, 4, 3, 2].entries()) {
+      colors[index] = {
+        ...adjustHsl(colors[index + 1], { s: 4 }),
+        l: fixedLightness[position],
+      }
+    }
+  } else {
+    const lightnessSteps: Record<number, number> = {
+      5: 6,
+      4: 4,
+      3: 2,
+      2: 2,
+    }
+    for (let index = 5; index >= 2; index -= 1) {
+      colors[index] = adjustHsl(colors[index + 1], {
+        s: 4,
+        l: lightnessSteps[index],
+      })
+    }
   }
 
   colors[1] = { h: base.h, s: 0, l: 100 }
@@ -258,6 +286,10 @@ export function generateNeutralDark(
   }
 
   for (let index = 12; index >= 2; index -= 1) {
+    if (index === 5 && base.l > 15) {
+      colors[index] = adjustHsl(colors[index + 1], { s: 6, l: 10 })
+      continue
+    }
     const next = adjustHsl(colors[index + 1], steps[index])
     colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 80) } : next
   }

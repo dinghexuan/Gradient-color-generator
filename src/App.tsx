@@ -188,6 +188,7 @@ function ColorInput(props: ColorInputProps) {
                   value={channelValue}
                   aria-label={`${label} ${channelLabel} 数值`}
                   onFocus={(event) => event.currentTarget.select()}
+                  onClick={(event) => event.currentTarget.select()}
                   onChange={(event) =>
                     updateChannel(key, Number(event.target.value))
                   }

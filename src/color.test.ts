@@ -60,9 +60,9 @@ describe('palette generation', () => {
   it('matches the default neutral light HSL progression', () => {
     expect(hexes(generateNeutralLight('#0F131A'))).toEqual([
       '#FFFFFF',
-      '#F1F4F8',
-      '#EBEEF4',
-      '#E2E6EE',
+      '#F5F7FA',
+      '#EEF1F6',
+      '#E5E9F0',
       '#D3D9E3',
       '#B0B9C9',
       '#8A95A8',
@@ -86,6 +86,70 @@ describe('palette generation', () => {
       )
       expect(palette[0].hex).toBe('#FFFFFF')
       expect(palette[0].hsl).toEqual({ h: baseHsl.h, s: 0, l: 100 })
+    },
+  )
+
+  it.each([
+    [5, [83, 89, 92, 94]],
+    [6, [86, 92, 95, 97]],
+    [10, [86, 92, 95, 97]],
+    [11, [88, 93, 96, 98]],
+    [15, [88, 93, 96, 98]],
+    [16, [92, 96, 96, 98]],
+    [20, [92, 96, 96, 98]],
+    [21, [93, 97, 99, 100]],
+  ])(
+    'applies the neutral lightness band for base L=%i',
+    (lightness, expected) => {
+      const palette = generateNeutralLight('#000000', {
+        h: 218,
+        s: 40,
+        l: lightness,
+      })
+
+      expect(
+        [5, 4, 3, 2].map((index) => palette[index - 1].hsl?.l),
+      ).toEqual(expected)
+      expect(
+        [5, 4, 3, 2].map((index) => palette[index - 1].hsl?.s),
+      ).toEqual([36, 40, 44, 48])
+    },
+  )
+
+  it.each([
+    [120, 15, 44, 80],
+    [120, 16, 46, 79],
+    [300, 15, 50, 80],
+    [300, 16, 50, 83],
+  ])(
+    'applies the dark color-5 override for H=%i and L=%i',
+    (hue, lightness, expectedSaturation, expectedLightness) => {
+      const color5 = generateNeutralDark('#000000', {
+        h: hue,
+        s: 50,
+        l: lightness,
+      })[4].hsl
+
+      expect(color5?.s).toBe(expectedSaturation)
+      expect(color5?.l).toBe(expectedLightness)
+    },
+  )
+
+  it.each([
+    [24, 8],
+    [204, 8],
+    [23, 9],
+    [205, 9],
+  ])(
+    'uses the inclusive dark hue range at H=%i',
+    (hue, expectedColor12Lightness) => {
+      const color12 = generateNeutralDark('#000000', {
+        h: hue,
+        s: 50,
+        l: 5,
+      })[11].hsl
+
+      expect(color12?.l).toBe(expectedColor12Lightness)
     },
   )
 
