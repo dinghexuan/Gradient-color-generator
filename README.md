@@ -46,3 +46,13 @@ npm test
 npm run lint
 npm run build
 ```
+
+## GitHub Pages
+
+仓库包含 [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)，
+推送到 `main` 后会自动构建并部署 `dist`。
+
+首次启用时，在仓库的 **Settings → Pages → Build and deployment** 中，
+将 **Source** 设置为 **GitHub Actions**。部署完成后访问：
+
+<https://dinghexuan.github.io/Gradient-color-generator/>
