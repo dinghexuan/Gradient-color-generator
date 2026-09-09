@@ -286,8 +286,10 @@ export function generateNeutralDark(
   }
 
   const fixedLightness =
-    base.l <= 10
+    base.l <= 5
       ? [80, 86, 90, 94]
+      : base.l <= 10
+        ? [82, 88, 92, 96]
       : base.l <= 15
         ? [84, 90, 94, 98]
         : base.l <= 20
