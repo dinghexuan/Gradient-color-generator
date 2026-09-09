@@ -241,14 +241,15 @@ function Swatch({ color, kind, isAnchor, onCopy, copied }: SwatchProps) {
 }
 
 function DashboardPreview({
-  palette,
-  kind,
+  brandPalette,
+  neutralPalette,
 }: {
-  palette: PaletteColor[]
-  kind: PaletteKind
+  brandPalette: PaletteColor[]
+  neutralPalette: PaletteColor[]
 }) {
-  const color = (index: number) => palette[index - 1].hex
-  const accent = kind === 'brand' ? color(9) : color(10)
+  const color = (index: number) => neutralPalette[index - 1].hex
+  const brandColor = (index: number) => brandPalette[index - 1].hex
+  const accent = brandColor(9)
   const accentText = getContrastColor(accent)
   const chartValues = [38, 55, 46, 70, 63, 82, 74, 91, 78, 96, 86, 100]
 
@@ -418,7 +419,8 @@ function DashboardPreview({
                       <span
                         style={{
                           width: `${value}%`,
-                          background: index === 0 ? accent : color(8 - index),
+                          background:
+                            index === 0 ? accent : brandColor(8 - index),
                         }}
                       />
                     </span>
@@ -451,7 +453,7 @@ function DashboardPreview({
               ].map(([project, owner, status, progress], index) => (
                 <div className="table-row" key={project}>
                   <span>
-                    <i style={{ background: color(7 + index) }} />
+                    <i style={{ background: brandColor(7 + index) }} />
                     {project}
                   </span>
                   <span>{owner}</span>
@@ -507,8 +509,63 @@ function palettesToCss(brand: string, neutral: string) {
     .join('\n\n')}\n}`
 }
 
+interface PaletteSectionProps {
+  kind: PaletteKind
+  mode: PaletteMode
+  palette: PaletteColor[]
+  copiedKey: string | null
+  onCopy: (kind: PaletteKind, color: PaletteColor) => void
+}
+
+function PaletteSection({
+  kind,
+  mode,
+  palette,
+  copiedKey,
+  onCopy,
+}: PaletteSectionProps) {
+  const isBrand = kind === 'brand'
+
+  return (
+    <section className="palette-block">
+      <div className="palette-block-heading">
+        <div>
+          <span className={`palette-dot ${kind}`} />
+          <h3>{isBrand ? '品牌色 / 辅助色' : '中性色'}</h3>
+          <span className="palette-model">{isBrand ? 'HSB' : 'HSL'}</span>
+        </div>
+        <span>{mode === 'light' ? '浅色色板' : '暗色色板'} · 13 阶</span>
+      </div>
+      <div className="palette-scroll">
+        <div className="palette-track">
+          <div className="gradient-ribbon">
+            {palette.map((color) => (
+              <span key={color.name} style={{ background: color.hex }} />
+            ))}
+          </div>
+          <div className="swatch-grid">
+            {palette.map((color) => (
+              <Swatch
+                key={color.name}
+                color={color}
+                kind={kind}
+                isAnchor={color.index === (isBrand ? 9 : 13)}
+                copied={copiedKey === `${kind}-${color.name}`}
+                onCopy={(item) => onCopy(kind, item)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <p className="palette-tip">
+        <span />
+        点击任意色块，复制 HEX 和 {isBrand ? 'HSB' : 'HSL'} 色值
+      </p>
+    </section>
+  )
+}
+
 function App() {
-  const [kind, setKind] = useState<PaletteKind>('brand')
   const [mode, setMode] = useState<PaletteMode>('light')
   const [brandHex, setBrandHex] = useState(DEFAULT_BRAND)
   const [neutralHex, setNeutralHex] = useState(DEFAULT_NEUTRAL)
@@ -519,9 +576,13 @@ function App() {
   } | null>(null)
   const toastTimer = useRef<number | null>(null)
 
-  const palette = useMemo(
-    () => generatePalette(kind, mode, brandHex, neutralHex),
-    [brandHex, kind, mode, neutralHex],
+  const brandPalette = useMemo(
+    () => generatePalette('brand', mode, brandHex, neutralHex),
+    [brandHex, mode, neutralHex],
+  )
+  const neutralPalette = useMemo(
+    () => generatePalette('neutral', mode, brandHex, neutralHex),
+    [brandHex, mode, neutralHex],
   )
 
   useEffect(
@@ -549,10 +610,10 @@ function App() {
     }
   }
 
-  const copyColor = async (color: PaletteColor) => {
+  const copyColor = async (kind: PaletteKind, color: PaletteColor) => {
     const text = `${color.hex}  ${formatChannels(color.hex, kind)}`
     if (await copyText(text, `已复制 ${color.name} · ${color.hex}`)) {
-      setCopiedKey(color.name)
+      setCopiedKey(`${kind}-${color.name}`)
       window.setTimeout(() => setCopiedKey(null), 1200)
     }
   }
@@ -615,7 +676,7 @@ function App() {
             </p>
           </div>
           <div className="hero-palette" aria-hidden="true">
-            {palette.slice(2, 11).map((color, index) => (
+            {brandPalette.slice(2, 11).map((color, index) => (
               <span
                 key={color.name}
                 style={{
@@ -631,28 +692,7 @@ function App() {
           <div className="control-panel">
             <div className="control-top">
               <div>
-                <p className="control-kicker">01 · 选择色板类型</p>
-                <div className="tab-list" role="tablist" aria-label="色板类型">
-                  <button
-                    role="tab"
-                    aria-selected={kind === 'brand'}
-                    className={kind === 'brand' ? 'active' : ''}
-                    onClick={() => setKind('brand')}
-                  >
-                    品牌色 / 辅助色
-                  </button>
-                  <button
-                    role="tab"
-                    aria-selected={kind === 'neutral'}
-                    className={kind === 'neutral' ? 'active' : ''}
-                    onClick={() => setKind('neutral')}
-                  >
-                    中性色
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p className="control-kicker">02 · 选择生成模式</p>
+                <p className="control-kicker">01 · 选择生成模式</p>
                 <div className="mode-switch" aria-label="色板模式">
                   <button
                     className={mode === 'light' ? 'active' : ''}
@@ -676,7 +716,7 @@ function App() {
 
             <div className="input-heading">
               <div>
-                <p className="control-kicker">03 · 调试基准色</p>
+                <p className="control-kicker">02 · 调试基准色</p>
                 <h2>颜色通道</h2>
               </div>
               <button className="reset-button" onClick={resetColors}>
@@ -684,25 +724,19 @@ function App() {
                 恢复默认
               </button>
             </div>
-            <div className={`input-row ${kind === 'neutral' ? 'single' : ''}`}>
-              {kind === 'brand' && (
-                <ColorInput
-                  id="brand-color"
-                  label="品牌 / 辅助色基准"
-                  hint="映射至 color-9"
-                  value={brandHex}
-                  model="HSB"
-                  onChange={setBrandHex}
-                />
-              )}
+            <div className="input-row">
+              <ColorInput
+                id="brand-color"
+                label="品牌 / 辅助色基准"
+                hint="映射至 color-9"
+                value={brandHex}
+                model="HSB"
+                onChange={setBrandHex}
+              />
               <ColorInput
                 id="neutral-color"
-                label={kind === 'brand' ? '暗色混合基底' : '中性色基准'}
-                hint={
-                  kind === 'brand'
-                    ? '用于构建暗色色板'
-                    : '映射至 color-13'
-                }
+                label="中性色基准"
+                hint="映射至 color-13，同时用于暗色混合"
                 value={neutralHex}
                 model="HSL"
                 onChange={setNeutralHex}
@@ -713,11 +747,8 @@ function App() {
           <div className="palette-section">
             <div className="section-heading palette-heading">
               <div>
-                <p className="eyebrow">GENERATED PALETTE</p>
-                <h2>
-                  {kind === 'brand' ? '品牌色 / 辅助色' : '中性色'} ·{' '}
-                  {mode === 'light' ? '浅色色板' : '暗色色板'}
-                </h2>
+                <p className="eyebrow">GENERATED PALETTES</p>
+                <h2>完整色板</h2>
               </div>
               <div className="palette-actions">
                 <button
@@ -737,33 +768,31 @@ function App() {
                 </button>
               </div>
             </div>
-
-            <div className="gradient-ribbon">
-              {palette.map((color) => (
-                <span key={color.name} style={{ background: color.hex }} />
-              ))}
-            </div>
-
-            <div className="swatch-grid">
-              {palette.map((color) => (
-                <Swatch
-                  key={color.name}
-                  color={color}
-                  kind={kind}
-                  isAnchor={color.index === (kind === 'brand' ? 9 : 13)}
-                  copied={copiedKey === color.name}
-                  onCopy={(item) => void copyColor(item)}
-                />
-              ))}
-            </div>
-            <p className="palette-tip">
-              <span />
-              点击任意色块，复制 HEX 和 {kind === 'brand' ? 'HSB' : 'HSL'} 色值
-            </p>
+            <PaletteSection
+              kind="brand"
+              mode={mode}
+              palette={brandPalette}
+              copiedKey={copiedKey}
+              onCopy={(paletteKind, color) =>
+                void copyColor(paletteKind, color)
+              }
+            />
+            <PaletteSection
+              kind="neutral"
+              mode={mode}
+              palette={neutralPalette}
+              copiedKey={copiedKey}
+              onCopy={(paletteKind, color) =>
+                void copyColor(paletteKind, color)
+              }
+            />
           </div>
         </section>
 
-        <DashboardPreview palette={palette} kind={kind} />
+        <DashboardPreview
+          brandPalette={brandPalette}
+          neutralPalette={neutralPalette}
+        />
       </main>
 
       <footer>
