@@ -279,19 +279,35 @@ export function generateNeutralDark(
     8: { s: isMiddleHue ? -6 : -2, l: isMiddleHue ? 10 : 12 },
     7: { s: -2, l: 10 },
     6: { s: 2, l: 20 },
-    5: { s: isMiddleHue ? 4 : 6, l: 20 },
-    4: { s: 4, l: 6 },
-    3: { s: 4, l: 4 },
-    2: { s: 4, l: 4 },
   }
 
-  for (let index = 12; index >= 2; index -= 1) {
-    if (index === 5 && base.l > 15) {
-      colors[index] = adjustHsl(colors[index + 1], { s: 6, l: 10 })
-      continue
-    }
-    const next = adjustHsl(colors[index + 1], steps[index])
-    colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 80) } : next
+  for (let index = 12; index >= 6; index -= 1) {
+    colors[index] = adjustHsl(colors[index + 1], steps[index])
+  }
+
+  const fixedLightness =
+    base.l <= 10
+      ? [80, 86, 90, 94]
+      : base.l <= 15
+        ? [84, 90, 94, 98]
+        : base.l <= 20
+          ? [86, 92, 96, 98]
+          : null
+  const lightnessSteps: Record<number, number> = {
+    5: 10,
+    4: 6,
+    3: 4,
+    2: 2,
+  }
+
+  for (const [position, index] of [5, 4, 3, 2].entries()) {
+    const next = adjustHsl(colors[index + 1], {
+      s: index === 5 && !isMiddleHue ? 6 : 4,
+      l: fixedLightness ? 0 : lightnessSteps[index],
+    })
+    colors[index] = fixedLightness
+      ? { ...next, l: fixedLightness[position] }
+      : next
   }
 
   colors[1] = { h: base.h, s: 0, l: 100 }

@@ -117,23 +117,59 @@ describe('palette generation', () => {
   )
 
   it.each([
-    [120, 15, 44, 80],
-    [120, 16, 46, 79],
-    [300, 15, 50, 80],
-    [300, 16, 50, 83],
+    [0, [80, 86, 90, 94]],
+    [10, [80, 86, 90, 94]],
+    [11, [84, 90, 94, 98]],
+    [15, [84, 90, 94, 98]],
+    [16, [86, 92, 96, 98]],
+    [20, [86, 92, 96, 98]],
+    [21, [84, 90, 94, 96]],
   ])(
-    'applies the dark color-5 override for H=%i and L=%i',
-    (hue, lightness, expectedSaturation, expectedLightness) => {
-      const color5 = generateNeutralDark('#000000', {
-        h: hue,
+    'applies the neutral dark lightness band for base L=%i',
+    (lightness, expected) => {
+      const palette = generateNeutralDark('#000000', {
+        h: 120,
         s: 50,
         l: lightness,
-      })[4].hsl
+      })
 
-      expect(color5?.s).toBe(expectedSaturation)
-      expect(color5?.l).toBe(expectedLightness)
+      expect(
+        [5, 4, 3, 2].map((index) => palette[index - 1].hsl?.l),
+      ).toEqual(expected)
     },
   )
+
+  it.each([
+    [24, [44, 48, 52, 56]],
+    [204, [44, 48, 52, 56]],
+    [23, [50, 54, 58, 62]],
+    [205, [50, 54, 58, 62]],
+  ])(
+    'applies the neutral dark saturation branch at H=%i',
+    (hue, expected) => {
+      const palette = generateNeutralDark('#000000', {
+        h: hue,
+        s: 50,
+        l: 10,
+      })
+
+      expect(
+        [5, 4, 3, 2].map((index) => palette[index - 1].hsl?.s),
+      ).toEqual(expected)
+    },
+  )
+
+  it('continues the dark lightness progression above base L=20', () => {
+    const palette = generateNeutralDark('#000000', {
+      h: 300,
+      s: 50,
+      l: 21,
+    })
+
+    expect([5, 4, 3, 2].map((index) => palette[index - 1].hsl?.l)).toEqual([
+      88, 94, 98, 100,
+    ])
+  })
 
   it.each([
     [24, 8],
