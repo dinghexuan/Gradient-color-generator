@@ -12,7 +12,23 @@
 - 每个色块同步展示对应的 HSB 或 HSL 通道值
 - 品牌色和中性色同时展示，每套 13 阶色板保持单行排列
 - 一键复制 CSS 变量、下载完整 JSON tokens
-- 浅色响应式界面与完整仪表盘应用预览
+- 浅色响应式界面
+
+## 算法文件
+
+- [`src/color.ts`](src/color.ts)：应用使用的 TypeScript 源码
+- [`palette-algorithm.js`](palette-algorithm.js)：可独立导入的 JavaScript ES Module 版本
+
+```js
+import { generatePalette } from './palette-algorithm.js'
+
+const colors = generatePalette(
+  'brand',
+  'light',
+  '#FF6000',
+  '#0F131A',
+)
+```
 
 默认品牌色为 `#FF6000`，默认中性色为 `#0F131A`。
 
