@@ -37,14 +37,23 @@ import {
 const DEFAULT_BRAND = '#FF6000'
 const DEFAULT_NEUTRAL = '#0F131A'
 
-interface ColorInputProps {
+interface SharedColorInputProps {
   id: string
   label: string
   hint: string
-  value: string
-  model: 'HSB' | 'HSL'
-  onChange: (value: string) => void
 }
+
+type ColorInputProps =
+  | (SharedColorInputProps & {
+      model: 'HSB'
+      channels: HSV
+      onChannelsChange: (channels: HSV) => void
+    })
+  | (SharedColorInputProps & {
+      model: 'HSL'
+      channels: HSL
+      onChannelsChange: (channels: HSL) => void
+    })
 
 interface ChannelDefinition {
   key: 'h' | 's' | 'v' | 'l'
@@ -58,23 +67,11 @@ const roundChannels = <T extends HSL | HSV>(channels: T): T =>
     Object.entries(channels).map(([key, value]) => [key, Math.round(value)]),
   ) as unknown as T
 
-function ColorInput({
-  id,
-  label,
-  hint,
-  value,
-  model,
-  onChange,
-}: ColorInputProps) {
+function ColorInput(props: ColorInputProps) {
+  const { id, label, hint, model, channels } = props
+  const value = model === 'HSB' ? hsvToHex(channels) : hslToHex(channels)
   const [draft, setDraft] = useState(value)
   const [invalid, setInvalid] = useState(false)
-  const channels = useMemo(
-    () =>
-      model === 'HSB'
-        ? roundChannels(hexToHsv(value))
-        : roundChannels(hexToHsl(value)),
-    [model, value],
-  )
   const channelDefinitions: ChannelDefinition[] =
     model === 'HSB'
       ? [
@@ -90,6 +87,14 @@ function ColorInput({
 
   useEffect(() => setDraft(value), [value])
 
+  const setFromHex = (hex: string) => {
+    if (props.model === 'HSB') {
+      props.onChannelsChange(hexToHsv(hex))
+    } else {
+      props.onChannelsChange(hexToHsl(hex))
+    }
+  }
+
   const commitHex = () => {
     const normalized = normalizeHex(draft)
     if (!normalized) {
@@ -98,18 +103,17 @@ function ColorInput({
     }
     setInvalid(false)
     setDraft(normalized)
-    onChange(normalized)
+    setFromHex(normalized)
   }
 
   const updateChannel = (key: ChannelDefinition['key'], rawValue: number) => {
+    if (!Number.isFinite(rawValue)) return
     const max = key === 'h' ? 360 : 100
     const nextValue = Math.min(max, Math.max(0, rawValue))
-    if (model === 'HSB') {
-      const hsv = { ...(channels as HSV), [key]: nextValue }
-      onChange(hsvToHex(hsv))
+    if (props.model === 'HSB') {
+      props.onChannelsChange({ ...props.channels, [key]: nextValue })
     } else {
-      const hsl = { ...(channels as HSL), [key]: nextValue }
-      onChange(hslToHex(hsl))
+      props.onChannelsChange({ ...props.channels, [key]: nextValue })
     }
   }
 
@@ -128,7 +132,7 @@ function ColorInput({
             aria-label={`${label}颜色选择器`}
             type="color"
             value={value}
-            onChange={(event) => onChange(event.target.value.toUpperCase())}
+            onChange={(event) => setFromHex(event.target.value.toUpperCase())}
           />
         </label>
         <span className="hash">#</span>
@@ -142,7 +146,7 @@ function ColorInput({
             const next = event.target.value.replace(/[^\da-f]/gi, '')
             setDraft(`#${next.toUpperCase()}`)
             setInvalid(false)
-            if (next.length === 6) onChange(`#${next.toUpperCase()}`)
+            if (next.length === 6) setFromHex(`#${next.toUpperCase()}`)
           }}
           onBlur={commitHex}
           onKeyDown={(event) => {
@@ -152,7 +156,9 @@ function ColorInput({
       </div>
       <div className="channel-editor">
         {channelDefinitions.map(({ key, label: channelLabel, max, unit }) => {
-          const channelValue = channels[key as keyof typeof channels]
+          const channelValue = Math.round(
+            channels[key as keyof typeof channels],
+          )
           return (
             <div className="channel-row" key={key}>
               <label htmlFor={`${id}-${key}`}>{channelLabel}</label>
@@ -161,6 +167,7 @@ function ColorInput({
                 type="range"
                 min="0"
                 max={max}
+                step="1"
                 value={channelValue}
                 aria-label={`${label} ${channelLabel} 通道`}
                 style={{
@@ -177,11 +184,24 @@ function ColorInput({
                   type="number"
                   min="0"
                   max={max}
+                  step="1"
                   value={channelValue}
                   aria-label={`${label} ${channelLabel} 数值`}
+                  onFocus={(event) => event.currentTarget.select()}
                   onChange={(event) =>
                     updateChannel(key, Number(event.target.value))
                   }
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+                      return
+                    }
+                    event.preventDefault()
+                    const direction = event.key === 'ArrowUp' ? 1 : -1
+                    updateChannel(
+                      key,
+                      channelValue + direction * (event.shiftKey ? 10 : 1),
+                    )
+                  }}
                 />
                 <span>{unit}</span>
               </div>
@@ -197,10 +217,10 @@ function ColorInput({
 function formatChannels(hex: string, kind: PaletteKind) {
   if (kind === 'brand') {
     const { h, s, v } = roundChannels(hexToHsv(hex))
-    return `H ${h}°  S ${s}%  B ${v}%`
+    return `H ${h}°\nS ${s}%\nB ${v}%`
   }
   const { h, s, l } = roundChannels(hexToHsl(hex))
-  return `H ${h}°  S ${s}%  L ${l}%`
+  return `H ${h}°\nS ${s}%\nL ${l}%`
 }
 
 interface SwatchProps {
@@ -216,7 +236,7 @@ function Swatch({ color, kind, isAnchor, onCopy, copied }: SwatchProps) {
 
   return (
     <button
-      className="swatch"
+      className={`swatch${isAnchor ? ' is-anchor' : ''}`}
       onClick={() => onCopy(color)}
       aria-label={`复制 ${color.name} ${color.hex}`}
     >
@@ -224,7 +244,6 @@ function Swatch({ color, kind, isAnchor, onCopy, copied }: SwatchProps) {
         className="swatch-color"
         style={{ backgroundColor: color.hex, color: contrast }}
       >
-        {isAnchor && <span className="anchor-badge">基准色</span>}
         <span className="copy-indicator">
           {copied ? <Check size={17} /> : <Clipboard size={17} />}
         </span>
@@ -567,14 +586,20 @@ function PaletteSection({
 
 function App() {
   const [mode, setMode] = useState<PaletteMode>('light')
-  const [brandHex, setBrandHex] = useState(DEFAULT_BRAND)
-  const [neutralHex, setNeutralHex] = useState(DEFAULT_NEUTRAL)
+  const [brandChannels, setBrandChannels] = useState<HSV>(() =>
+    hexToHsv(DEFAULT_BRAND),
+  )
+  const [neutralChannels, setNeutralChannels] = useState<HSL>(() =>
+    hexToHsl(DEFAULT_NEUTRAL),
+  )
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [toast, setToast] = useState<{
     message: string
     tone: 'success' | 'error'
   } | null>(null)
   const toastTimer = useRef<number | null>(null)
+  const brandHex = hsvToHex(brandChannels)
+  const neutralHex = hslToHex(neutralChannels)
 
   const brandPalette = useMemo(
     () => generatePalette('brand', mode, brandHex, neutralHex),
@@ -634,8 +659,8 @@ function App() {
   }
 
   const resetColors = () => {
-    setBrandHex(DEFAULT_BRAND)
-    setNeutralHex(DEFAULT_NEUTRAL)
+    setBrandChannels(hexToHsv(DEFAULT_BRAND))
+    setNeutralChannels(hexToHsl(DEFAULT_NEUTRAL))
     showToast('已恢复默认色值')
   }
 
@@ -729,17 +754,17 @@ function App() {
                 id="brand-color"
                 label="品牌 / 辅助色基准"
                 hint="映射至 color-9"
-                value={brandHex}
                 model="HSB"
-                onChange={setBrandHex}
+                channels={brandChannels}
+                onChannelsChange={setBrandChannels}
               />
               <ColorInput
                 id="neutral-color"
                 label="中性色基准"
                 hint="映射至 color-13，同时用于暗色混合"
-                value={neutralHex}
                 model="HSL"
-                onChange={setNeutralHex}
+                channels={neutralChannels}
+                onChannelsChange={setNeutralChannels}
               />
             </div>
           </div>

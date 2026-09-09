@@ -618,7 +618,6 @@ main {
   cursor: pointer;
   text-align: left;
   transition:
-    transform 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
 }
@@ -626,8 +625,11 @@ main {
 .swatch:hover {
   z-index: 1;
   border-color: var(--border-strong);
-  box-shadow: 0 12px 24px rgba(47, 42, 34, 0.1);
-  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(47, 42, 34, 0.1);
+}
+
+.swatch.is-anchor {
+  box-shadow: inset 0 3px 0 var(--orange);
 }
 
 .swatch-color {
@@ -638,15 +640,6 @@ main {
   justify-content: space-between;
   padding: 10px;
   transition: background-color 180ms ease;
-}
-
-.anchor-badge {
-  padding: 4px 7px;
-  border: 1px solid currentColor;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  opacity: 0.78;
 }
 
 .copy-indicator {
@@ -666,7 +659,9 @@ main {
 
 .swatch-meta {
   display: grid;
+  align-content: start;
   gap: 7px;
+  min-height: 116px;
   padding: 10px 8px 11px;
 }
 
@@ -691,7 +686,7 @@ main {
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
-  white-space: normal;
+  white-space: pre-line;
 }
 
 .palette-tip {
