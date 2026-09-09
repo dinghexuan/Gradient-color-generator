@@ -13,13 +13,13 @@ interface RGB {
   b: number
 }
 
-interface HSV {
+export interface HSV {
   h: number
   s: number
   v: number
 }
 
-interface HSL {
+export interface HSL {
   h: number
   s: number
   l: number
@@ -158,8 +158,10 @@ function hslToRgb({ h, s, l }: HSL): RGB {
   }
 }
 
-const hsvToHex = (color: HSV) => rgbToHex(hsvToRgb(color))
-const hslToHex = (color: HSL) => rgbToHex(hslToRgb(color))
+export const hexToHsv = (hex: string): HSV => rgbToHsv(hexToRgb(hex))
+export const hexToHsl = (hex: string): HSL => rgbToHsl(hexToRgb(hex))
+export const hsvToHex = (color: HSV) => rgbToHex(hsvToRgb(color))
+export const hslToHex = (color: HSL) => rgbToHex(hslToRgb(color))
 
 const adjustHsv = (
   color: HSV,
@@ -179,12 +181,6 @@ const adjustHsl = (
   l: clamp(color.l + (changes.l ?? 0)),
 })
 
-function capHslLightness(color: HSV, maximum: number): HSV {
-  const hsl = rgbToHsl(hsvToRgb(color))
-  if (hsl.l <= maximum) return color
-  return rgbToHsv(hslToRgb({ ...hsl, l: maximum }))
-}
-
 function toPalette(colors: Record<number, string>): PaletteColor[] {
   return Array.from({ length: 13 }, (_, position) => {
     const index = position + 1
@@ -193,30 +189,30 @@ function toPalette(colors: Record<number, string>): PaletteColor[] {
 }
 
 export function generateNeutralLight(baseHex: string): PaletteColor[] {
-  const colors: Record<number, HSV> = {
-    13: rgbToHsv(hexToRgb(baseHex)),
+  const colors: Record<number, HSL> = {
+    13: hexToHsl(baseHex),
   }
-  const steps: Record<number, { s: number; v: number }> = {
-    12: { s: -2, v: 8 },
-    11: { s: -2, v: 4 },
-    10: { s: -2, v: 3 },
-    9: { s: -2, v: 10 },
-    8: { s: -2, v: 9 },
-    7: { s: -2, v: 18 },
-    6: { s: 4, v: 14 },
-    5: { s: 4, v: 12 },
-    4: { s: 4, v: 5 },
-    3: { s: 4, v: 3 },
-    2: { s: 4, v: 2 },
+  const steps: Record<number, { s: number; l: number }> = {
+    12: { s: -2, l: 8 },
+    11: { s: -2, l: 4 },
+    10: { s: -2, l: 3 },
+    9: { s: -2, l: 10 },
+    8: { s: -2, l: 9 },
+    7: { s: -2, l: 18 },
+    6: { s: 4, l: 14 },
+    5: { s: 4, l: 12 },
+    4: { s: 4, l: 5 },
+    3: { s: 4, l: 3 },
+    2: { s: 4, l: 2 },
   }
 
   for (let index = 12; index >= 2; index -= 1) {
-    const next = adjustHsv(colors[index + 1], steps[index])
-    colors[index] = index === 5 ? capHslLightness(next, 86) : next
+    const next = adjustHsl(colors[index + 1], steps[index])
+    colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 86) } : next
   }
 
   const hexColors = Object.fromEntries(
-    Object.entries(colors).map(([index, color]) => [index, hsvToHex(color)]),
+    Object.entries(colors).map(([index, color]) => [index, hslToHex(color)]),
   ) as Record<number, string>
   hexColors[1] = '#FFFFFF'
   return toPalette(hexColors)

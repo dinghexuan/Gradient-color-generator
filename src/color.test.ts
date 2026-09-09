@@ -4,6 +4,7 @@ import {
   generateBrandLight,
   generateNeutralDark,
   generateNeutralLight,
+  hexToHsl,
   normalizeHex,
 } from './color'
 
@@ -43,6 +44,35 @@ describe('palette generation', () => {
   it('uses pure white for neutral color-1', () => {
     expect(generateNeutralLight('#0F131A')[0].hex).toBe('#FFFFFF')
     expect(generateNeutralDark('#0F131A')[0].hex).toBe('#FFFFFF')
+  })
+
+  it('applies the neutral light progression in HSL space', () => {
+    const palette = generateNeutralLight('#0F131A')
+    const base = hexToHsl(palette[12].hex)
+    const color12 = hexToHsl(palette[11].hex)
+    const color11 = hexToHsl(palette[10].hex)
+
+    expect(color12.l - base.l).toBeCloseTo(8, 0)
+    expect(color11.l - color12.l).toBeCloseTo(4, 0)
+    expect(hexToHsl(palette[4].hex).l).toBeLessThanOrEqual(86.5)
+  })
+
+  it('matches the default neutral light HSL progression', () => {
+    expect(hexes(generateNeutralLight('#0F131A'))).toEqual([
+      '#FFFFFF',
+      '#F1F4F8',
+      '#EBEEF4',
+      '#E2E6EE',
+      '#D3D9E3',
+      '#B0B9C9',
+      '#8A95A8',
+      '#59667D',
+      '#445064',
+      '#2F3747',
+      '#27303F',
+      '#1F2633',
+      '#0F131A',
+    ])
   })
 
   it('uses the neutral base when composing the dark brand palette', () => {

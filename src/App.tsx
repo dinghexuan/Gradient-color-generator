@@ -1,20 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
+  ArrowUpRight,
+  Bell,
   Check,
-  ChevronRight,
   Clipboard,
   Code2,
   Download,
+  Layers3,
+  LayoutDashboard,
+  MoreHorizontal,
   Moon,
   Palette,
+  Plus,
   RotateCcw,
-  Sparkles,
+  Search,
+  Settings,
   Sun,
+  Users,
 } from 'lucide-react'
 import {
   generatePalette,
   getContrastColor,
+  hexToHsl,
+  hexToHsv,
+  hslToHex,
+  hsvToHex,
   normalizeHex,
+  type HSL,
+  type HSV,
   type PaletteColor,
   type PaletteKind,
   type PaletteMode,
@@ -28,16 +42,55 @@ interface ColorInputProps {
   label: string
   hint: string
   value: string
+  model: 'HSB' | 'HSL'
   onChange: (value: string) => void
 }
 
-function ColorInput({ id, label, hint, value, onChange }: ColorInputProps) {
+interface ChannelDefinition {
+  key: 'h' | 's' | 'v' | 'l'
+  label: string
+  max: number
+  unit: string
+}
+
+const roundChannels = <T extends HSL | HSV>(channels: T): T =>
+  Object.fromEntries(
+    Object.entries(channels).map(([key, value]) => [key, Math.round(value)]),
+  ) as unknown as T
+
+function ColorInput({
+  id,
+  label,
+  hint,
+  value,
+  model,
+  onChange,
+}: ColorInputProps) {
   const [draft, setDraft] = useState(value)
   const [invalid, setInvalid] = useState(false)
+  const channels = useMemo(
+    () =>
+      model === 'HSB'
+        ? roundChannels(hexToHsv(value))
+        : roundChannels(hexToHsl(value)),
+    [model, value],
+  )
+  const channelDefinitions: ChannelDefinition[] =
+    model === 'HSB'
+      ? [
+          { key: 'h', label: 'H', max: 360, unit: '°' },
+          { key: 's', label: 'S', max: 100, unit: '%' },
+          { key: 'v', label: 'B', max: 100, unit: '%' },
+        ]
+      : [
+          { key: 'h', label: 'H', max: 360, unit: '°' },
+          { key: 's', label: 'S', max: 100, unit: '%' },
+          { key: 'l', label: 'L', max: 100, unit: '%' },
+        ]
 
   useEffect(() => setDraft(value), [value])
 
-  const commit = () => {
+  const commitHex = () => {
     const normalized = normalizeHex(draft)
     if (!normalized) {
       setInvalid(true)
@@ -48,10 +101,25 @@ function ColorInput({ id, label, hint, value, onChange }: ColorInputProps) {
     onChange(normalized)
   }
 
+  const updateChannel = (key: ChannelDefinition['key'], rawValue: number) => {
+    const max = key === 'h' ? 360 : 100
+    const nextValue = Math.min(max, Math.max(0, rawValue))
+    if (model === 'HSB') {
+      const hsv = { ...(channels as HSV), [key]: nextValue }
+      onChange(hsvToHex(hsv))
+    } else {
+      const hsl = { ...(channels as HSL), [key]: nextValue }
+      onChange(hslToHex(hsl))
+    }
+  }
+
   return (
     <div className={`color-input ${invalid ? 'is-invalid' : ''}`}>
       <div className="field-heading">
-        <label htmlFor={id}>{label}</label>
+        <div>
+          <label htmlFor={id}>{label}</label>
+          <span className="model-badge">{model}</span>
+        </div>
         <span>{hint}</span>
       </div>
       <div className="color-control">
@@ -76,26 +144,74 @@ function ColorInput({ id, label, hint, value, onChange }: ColorInputProps) {
             setInvalid(false)
             if (next.length === 6) onChange(`#${next.toUpperCase()}`)
           }}
-          onBlur={commit}
+          onBlur={commitHex}
           onKeyDown={(event) => {
             if (event.key === 'Enter') event.currentTarget.blur()
           }}
         />
-        <span className="color-orb" style={{ background: value }} />
+      </div>
+      <div className="channel-editor">
+        {channelDefinitions.map(({ key, label: channelLabel, max, unit }) => {
+          const channelValue = channels[key as keyof typeof channels]
+          return (
+            <div className="channel-row" key={key}>
+              <label htmlFor={`${id}-${key}`}>{channelLabel}</label>
+              <input
+                id={`${id}-${key}`}
+                type="range"
+                min="0"
+                max={max}
+                value={channelValue}
+                aria-label={`${label} ${channelLabel} 通道`}
+                style={{
+                  background: `linear-gradient(to right, ${value} ${
+                    (channelValue / max) * 100
+                  }%, #E8E9ED ${(channelValue / max) * 100}%)`,
+                }}
+                onChange={(event) =>
+                  updateChannel(key, Number(event.target.value))
+                }
+              />
+              <div className="channel-number">
+                <input
+                  type="number"
+                  min="0"
+                  max={max}
+                  value={channelValue}
+                  aria-label={`${label} ${channelLabel} 数值`}
+                  onChange={(event) =>
+                    updateChannel(key, Number(event.target.value))
+                  }
+                />
+                <span>{unit}</span>
+              </div>
+            </div>
+          )
+        })}
       </div>
       {invalid && <p className="field-error">请输入有效的 3 位或 6 位 HEX 色值</p>}
     </div>
   )
 }
 
+function formatChannels(hex: string, kind: PaletteKind) {
+  if (kind === 'brand') {
+    const { h, s, v } = roundChannels(hexToHsv(hex))
+    return `H ${h}°  S ${s}%  B ${v}%`
+  }
+  const { h, s, l } = roundChannels(hexToHsl(hex))
+  return `H ${h}°  S ${s}%  L ${l}%`
+}
+
 interface SwatchProps {
   color: PaletteColor
+  kind: PaletteKind
   isAnchor: boolean
   onCopy: (color: PaletteColor) => void
   copied: boolean
 }
 
-function Swatch({ color, isAnchor, onCopy, copied }: SwatchProps) {
+function Swatch({ color, kind, isAnchor, onCopy, copied }: SwatchProps) {
   const contrast = getContrastColor(color.hex)
 
   return (
@@ -108,20 +224,23 @@ function Swatch({ color, isAnchor, onCopy, copied }: SwatchProps) {
         className="swatch-color"
         style={{ backgroundColor: color.hex, color: contrast }}
       >
-        {isAnchor && <span className="anchor-badge">BASE</span>}
+        {isAnchor && <span className="anchor-badge">基准色</span>}
         <span className="copy-indicator">
-          {copied ? <Check size={16} /> : <Clipboard size={16} />}
+          {copied ? <Check size={17} /> : <Clipboard size={17} />}
         </span>
       </span>
       <span className="swatch-meta">
-        <strong>{color.name}</strong>
-        <span>{color.hex}</span>
+        <span className="swatch-name-row">
+          <strong>{color.name}</strong>
+          <span>{color.hex}</span>
+        </span>
+        <span className="channel-value">{formatChannels(color.hex, kind)}</span>
       </span>
     </button>
   )
 }
 
-function Preview({
+function DashboardPreview({
   palette,
   kind,
 }: {
@@ -129,84 +248,227 @@ function Preview({
   kind: PaletteKind
 }) {
   const color = (index: number) => palette[index - 1].hex
+  const accent = kind === 'brand' ? color(9) : color(10)
+  const accentText = getContrastColor(accent)
+  const chartValues = [38, 55, 46, 70, 63, 82, 74, 91, 78, 96, 86, 100]
 
   return (
     <section className="preview-section">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">LIVE PREVIEW</p>
-          <h2>应用预览</h2>
+          <p className="eyebrow">LIVE PRODUCT PREVIEW</p>
+          <h2>应用场景预览</h2>
         </div>
-        <span className="section-caption">实时映射色阶</span>
+        <span className="section-caption">色阶会实时映射到完整产品界面</span>
       </div>
-      <div className="preview-grid">
-        <div
-          className="preview-card preview-ui"
-          style={{
-            background: color(1),
-            borderColor: color(3),
-            color: color(12),
-          }}
+      <div
+        className="dashboard"
+        style={{
+          background: color(1),
+          borderColor: color(3),
+          color: color(12),
+        }}
+      >
+        <aside
+          className="dashboard-sidebar"
+          style={{ background: color(13), color: color(3) }}
         >
-          <div className="mock-nav">
-            <span className="mock-logo" style={{ background: color(9) }}>
-              C
-            </span>
-            <span>Chromatic</span>
-            <span className="mock-status" style={{ background: color(3) }}>
-              已同步
-            </span>
+          <div className="dashboard-logo">
+            <span style={{ background: accent, color: accentText }}>C</span>
+            Chromatic
           </div>
-          <div className="mock-body">
-            <span
-              className="mock-label"
-              style={{ color: kind === 'brand' ? color(9) : color(10) }}
+          <nav>
+            <button style={{ background: color(12), color: color(1) }}>
+              <LayoutDashboard size={16} />
+              工作台
+            </button>
+            <button>
+              <Activity size={16} />
+              数据洞察
+            </button>
+            <button>
+              <Layers3 size={16} />
+              项目中心
+            </button>
+            <button>
+              <Users size={16} />
+              团队成员
+            </button>
+          </nav>
+          <div className="sidebar-footer">
+            <Settings size={16} />
+            偏好设置
+          </div>
+        </aside>
+
+        <div className="dashboard-content">
+          <header className="dashboard-topbar" style={{ borderColor: color(3) }}>
+            <label className="dashboard-search" style={{ background: color(2) }}>
+              <Search size={15} />
+              <span>搜索项目、成员或任务</span>
+            </label>
+            <button className="icon-button" style={{ borderColor: color(3) }}>
+              <Bell size={16} />
+            </button>
+            <div className="dashboard-user">
+              <span style={{ background: color(5), color: color(12) }}>DX</span>
+              <div>
+                <strong>丁鹤轩</strong>
+                <small>产品设计师</small>
+              </div>
+            </div>
+          </header>
+
+          <div className="dashboard-main">
+            <div className="dashboard-title">
+              <div>
+                <span>2026 年 9 月 9 日 · 星期三</span>
+                <h3>早上好，这是今日概览</h3>
+              </div>
+              <button style={{ background: accent, color: accentText }}>
+                <Plus size={16} />
+                新建项目
+              </button>
+            </div>
+
+            <div className="metric-grid">
+              {[
+                ['活跃项目', '24', '+12.5%', Layers3],
+                ['本周任务', '128', '+8.2%', Check],
+                ['团队成员', '36', '+4.6%', Users],
+                ['完成率', '86%', '+5.4%', Activity],
+              ].map(([label, value, trend, Icon]) => (
+                <article
+                  className="metric-card"
+                  key={String(label)}
+                  style={{ background: color(2), borderColor: color(3) }}
+                >
+                  <div>
+                    <span>{label as string}</span>
+                    <Icon size={17} style={{ color: accent }} />
+                  </div>
+                  <strong>{value as string}</strong>
+                  <small style={{ color: accent }}>
+                    <ArrowUpRight size={13} />
+                    {trend as string} 较上周
+                  </small>
+                </article>
+              ))}
+            </div>
+
+            <div className="dashboard-panels">
+              <article
+                className="chart-panel"
+                style={{ background: color(2), borderColor: color(3) }}
+              >
+                <div className="panel-title">
+                  <div>
+                    <strong>项目活跃趋势</strong>
+                    <span>过去 12 个月</span>
+                  </div>
+                  <button style={{ borderColor: color(4) }}>年度</button>
+                </div>
+                <div className="chart-summary">
+                  <strong>12,860</strong>
+                  <span style={{ color: accent }}>+18.2%</span>
+                </div>
+                <div className="bar-chart">
+                  {chartValues.map((height, index) => (
+                    <span
+                      key={`${height}-${index}`}
+                      style={{
+                        height: `${height}%`,
+                        background: index === 11 ? accent : color(5),
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="chart-labels">
+                  <span>10月</span>
+                  <span>1月</span>
+                  <span>4月</span>
+                  <span>7月</span>
+                  <span>9月</span>
+                </div>
+              </article>
+
+              <article
+                className="progress-panel"
+                style={{ background: color(2), borderColor: color(3) }}
+              >
+                <div className="panel-title">
+                  <div>
+                    <strong>本周进度</strong>
+                    <span>按项目统计</span>
+                  </div>
+                  <MoreHorizontal size={18} />
+                </div>
+                {[
+                  ['Design System', 86],
+                  ['Mobile App', 64],
+                  ['Growth Website', 48],
+                  ['Research', 32],
+                ].map(([label, value], index) => (
+                  <div className="progress-item" key={String(label)}>
+                    <div>
+                      <span>{label as string}</span>
+                      <strong>{value as number}%</strong>
+                    </div>
+                    <span className="progress-track" style={{ background: color(4) }}>
+                      <span
+                        style={{
+                          width: `${value}%`,
+                          background: index === 0 ? accent : color(8 - index),
+                        }}
+                      />
+                    </span>
+                  </div>
+                ))}
+              </article>
+            </div>
+
+            <article
+              className="project-table"
+              style={{ background: color(2), borderColor: color(3) }}
             >
-              DESIGN TOKENS
-            </span>
-            <h3>让色彩自然形成系统</h3>
-            <p style={{ color: color(8) }}>
-              从一个基准色出发，得到稳定、连续且可直接应用的完整色板。
-            </p>
-            <div className="mock-actions">
-              <button
-                style={{
-                  background: color(9),
-                  color: getContrastColor(color(9)),
-                }}
-              >
-                开始使用
-              </button>
-              <button
-                style={{
-                  background: color(2),
-                  color: color(10),
-                  borderColor: color(4),
-                }}
-              >
-                查看规范
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="preview-card preview-scale">
-          <div className="scale-header">
-            <div>
-              <span>色阶分布</span>
-              <strong>01 — 13</strong>
-            </div>
-            <Sparkles size={20} />
-          </div>
-          <div className="scale-bars">
-            {palette.map((item, position) => (
-              <span
-                key={item.name}
-                style={{
-                  background: item.hex,
-                  height: `${34 + position * 4}px`,
-                }}
-              />
-            ))}
+              <div className="panel-title">
+                <div>
+                  <strong>最近项目</strong>
+                  <span>团队正在推进的重点工作</span>
+                </div>
+                <button style={{ color: accent }}>查看全部</button>
+              </div>
+              <div className="table-header">
+                <span>项目</span>
+                <span>负责人</span>
+                <span>状态</span>
+                <span>进度</span>
+              </div>
+              {[
+                ['品牌视觉升级', '周林', '进行中', '78%'],
+                ['移动端体验重构', '陈默', '评审中', '56%'],
+                ['数据中心 2.0', '林晓', '已规划', '24%'],
+              ].map(([project, owner, status, progress], index) => (
+                <div className="table-row" key={project}>
+                  <span>
+                    <i style={{ background: color(7 + index) }} />
+                    {project}
+                  </span>
+                  <span>{owner}</span>
+                  <span>
+                    <b
+                      style={{
+                        background: color(index + 3),
+                        color: color(11),
+                      }}
+                    >
+                      {status}
+                    </b>
+                  </span>
+                  <span>{progress}</span>
+                </div>
+              ))}
+            </article>
           </div>
         </div>
       </div>
@@ -288,7 +550,8 @@ function App() {
   }
 
   const copyColor = async (color: PaletteColor) => {
-    if (await copyText(color.hex, `已复制 ${color.name} · ${color.hex}`)) {
+    const text = `${color.hex}  ${formatChannels(color.hex, kind)}`
+    if (await copyText(text, `已复制 ${color.name} · ${color.hex}`)) {
       setCopiedKey(color.name)
       window.setTimeout(() => setCopiedKey(null), 1200)
     }
@@ -315,15 +578,12 @@ function App() {
     showToast('已恢复默认色值')
   }
 
-  const isAnchor = (index: number) =>
-    index === (kind === 'brand' ? 9 : 13)
-
   return (
     <div className="app-shell">
       <header className="topbar">
         <a className="brand-mark" href="#" aria-label="Chromatic 首页">
           <span className="brand-icon">
-            <Palette size={19} />
+            <Palette size={20} />
           </span>
           <span>
             Chromatic
@@ -331,9 +591,9 @@ function App() {
           </span>
         </a>
         <div className="topbar-meta">
-          <span className="version">13 STEP PALETTE</span>
+          <span>13 STEP PALETTE</span>
           <span className="topbar-divider" />
-          <span>v1.0</span>
+          <span>v1.1</span>
         </div>
       </header>
 
@@ -350,85 +610,103 @@ function App() {
               <em>构建完整色彩系统。</em>
             </h1>
             <p className="hero-description">
-              基于 HSV、HSL 与透明叠加算法，生成连续、可靠的 13
-              阶品牌色与中性色板。
+              精确控制 HSB 与 HSL 通道，实时生成连续、可靠的 13
+              阶品牌色和中性色板。
             </p>
           </div>
-          <div className="hero-visual" aria-hidden="true">
-            <span style={{ background: brandHex }} />
-            <span style={{ background: palette[7].hex }} />
-            <span style={{ background: palette[5].hex }} />
-            <span style={{ background: palette[3].hex }} />
-            <span style={{ background: palette[1].hex }} />
+          <div className="hero-palette" aria-hidden="true">
+            {palette.slice(2, 11).map((color, index) => (
+              <span
+                key={color.name}
+                style={{
+                  background: color.hex,
+                  transform: `translate(${index * 20}px, ${index * 5}px)`,
+                }}
+              />
+            ))}
           </div>
         </section>
 
         <section className="workspace">
           <div className="control-panel">
             <div className="control-top">
-              <div className="tab-list" role="tablist" aria-label="色板类型">
-                <button
-                  role="tab"
-                  aria-selected={kind === 'brand'}
-                  className={kind === 'brand' ? 'active' : ''}
-                  onClick={() => setKind('brand')}
-                >
-                  品牌色 / 辅助色
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={kind === 'neutral'}
-                  className={kind === 'neutral' ? 'active' : ''}
-                  onClick={() => setKind('neutral')}
-                >
-                  中性色
-                </button>
+              <div>
+                <p className="control-kicker">01 · 选择色板类型</p>
+                <div className="tab-list" role="tablist" aria-label="色板类型">
+                  <button
+                    role="tab"
+                    aria-selected={kind === 'brand'}
+                    className={kind === 'brand' ? 'active' : ''}
+                    onClick={() => setKind('brand')}
+                  >
+                    品牌色 / 辅助色
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={kind === 'neutral'}
+                    className={kind === 'neutral' ? 'active' : ''}
+                    onClick={() => setKind('neutral')}
+                  >
+                    中性色
+                  </button>
+                </div>
               </div>
-              <div className="mode-switch" aria-label="色板模式">
-                <button
-                  className={mode === 'light' ? 'active' : ''}
-                  aria-pressed={mode === 'light'}
-                  onClick={() => setMode('light')}
-                >
-                  <Sun size={15} />
-                  浅色
-                </button>
-                <button
-                  className={mode === 'dark' ? 'active' : ''}
-                  aria-pressed={mode === 'dark'}
-                  onClick={() => setMode('dark')}
-                >
-                  <Moon size={15} />
-                  暗色
-                </button>
+              <div>
+                <p className="control-kicker">02 · 选择生成模式</p>
+                <div className="mode-switch" aria-label="色板模式">
+                  <button
+                    className={mode === 'light' ? 'active' : ''}
+                    aria-pressed={mode === 'light'}
+                    onClick={() => setMode('light')}
+                  >
+                    <Sun size={16} />
+                    浅色色板
+                  </button>
+                  <button
+                    className={mode === 'dark' ? 'active' : ''}
+                    aria-pressed={mode === 'dark'}
+                    onClick={() => setMode('dark')}
+                  >
+                    <Moon size={16} />
+                    暗色色板
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="input-row">
+            <div className="input-heading">
+              <div>
+                <p className="control-kicker">03 · 调试基准色</p>
+                <h2>颜色通道</h2>
+              </div>
+              <button className="reset-button" onClick={resetColors}>
+                <RotateCcw size={16} />
+                恢复默认
+              </button>
+            </div>
+            <div className={`input-row ${kind === 'neutral' ? 'single' : ''}`}>
               {kind === 'brand' && (
                 <ColorInput
                   id="brand-color"
                   label="品牌 / 辅助色基准"
                   hint="映射至 color-9"
                   value={brandHex}
+                  model="HSB"
                   onChange={setBrandHex}
                 />
               )}
               <ColorInput
                 id="neutral-color"
-                label={kind === 'brand' ? '中性色混合基底' : '中性色基准'}
+                label={kind === 'brand' ? '暗色混合基底' : '中性色基准'}
                 hint={
                   kind === 'brand'
                     ? '用于构建暗色色板'
                     : '映射至 color-13'
                 }
                 value={neutralHex}
+                model="HSL"
                 onChange={setNeutralHex}
               />
-              <button className="reset-button" onClick={resetColors}>
-                <RotateCcw size={16} />
-                恢复默认
-              </button>
             </div>
           </div>
 
@@ -450,11 +728,11 @@ function App() {
                     )
                   }
                 >
-                  <Code2 size={16} />
+                  <Code2 size={17} />
                   复制 CSS
                 </button>
                 <button onClick={downloadJson}>
-                  <Download size={16} />
+                  <Download size={17} />
                   导出 JSON
                 </button>
               </div>
@@ -471,7 +749,8 @@ function App() {
                 <Swatch
                   key={color.name}
                   color={color}
-                  isAnchor={isAnchor(color.index)}
+                  kind={kind}
+                  isAnchor={color.index === (kind === 'brand' ? 9 : 13)}
                   copied={copiedKey === color.name}
                   onCopy={(item) => void copyColor(item)}
                 />
@@ -479,45 +758,12 @@ function App() {
             </div>
             <p className="palette-tip">
               <span />
-              点击任意色块复制 HEX 色值
+              点击任意色块，复制 HEX 和 {kind === 'brand' ? 'HSB' : 'HSL'} 色值
             </p>
           </div>
         </section>
 
-        <Preview palette={palette} kind={kind} />
-
-        <section className="formula-section">
-          <div className="formula-card">
-            <div className="formula-index">01</div>
-            <div>
-              <span>COLOR MODEL</span>
-              <strong>{kind === 'brand' ? 'HSV' : mode === 'dark' ? 'HSL' : 'HSV'}</strong>
-              <p>逐级计算，所有通道自动限制在有效范围内。</p>
-            </div>
-          </div>
-          <ChevronRight className="formula-arrow" />
-          <div className="formula-card">
-            <div className="formula-index">02</div>
-            <div>
-              <span>ANCHOR</span>
-              <strong>Color-{kind === 'brand' ? '9' : '13'}</strong>
-              <p>保留输入色作为稳定锚点，向两侧推导色阶。</p>
-            </div>
-          </div>
-          <ChevronRight className="formula-arrow" />
-          <div className="formula-card">
-            <div className="formula-index">03</div>
-            <div>
-              <span>DARK MODE</span>
-              <strong>{kind === 'brand' ? 'Alpha Blend' : 'HSL Shift'}</strong>
-              <p>
-                {kind === 'brand'
-                  ? '以中性色基底叠加浅色色板，保证暗色环境自然融合。'
-                  : '按色相区间调整明度与饱和度，保持层级清晰。'}
-              </p>
-            </div>
-          </div>
-        </section>
+        <DashboardPreview palette={palette} kind={kind} />
       </main>
 
       <footer>
@@ -527,7 +773,7 @@ function App() {
 
       {toast && (
         <div className={`toast ${toast.tone}`} role="status">
-          {toast.tone === 'success' ? <Check size={17} /> : <span>!</span>}
+          {toast.tone === 'success' ? <Check size={18} /> : <span>!</span>}
           {toast.message}
         </div>
       )}
