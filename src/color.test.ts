@@ -75,6 +75,20 @@ describe('palette generation', () => {
     ])
   })
 
+  it.each([generateNeutralLight, generateNeutralDark])(
+    'preserves the exact base hue across every neutral color',
+    (generate) => {
+      const baseHsl = { h: 173, s: 41, l: 17 }
+      const palette = generate('#193D36', baseHsl)
+
+      expect(palette.map((color) => color.hsl?.h)).toEqual(
+        Array(13).fill(baseHsl.h),
+      )
+      expect(palette[0].hex).toBe('#FFFFFF')
+      expect(palette[0].hsl).toEqual({ h: baseHsl.h, s: 0, l: 100 })
+    },
+  )
+
   it('uses the neutral base when composing the dark brand palette', () => {
     const warmNeutral = generateBrandDark('#FF6000', '#331100')
     const coolNeutral = generateBrandDark('#FF6000', '#001133')

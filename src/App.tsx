@@ -214,12 +214,12 @@ function ColorInput(props: ColorInputProps) {
   )
 }
 
-function formatChannels(hex: string, kind: PaletteKind) {
+function formatChannels(color: PaletteColor, kind: PaletteKind) {
   if (kind === 'brand') {
-    const { h, s, v } = roundChannels(hexToHsv(hex))
+    const { h, s, v } = roundChannels(color.hsv ?? hexToHsv(color.hex))
     return `H ${h}°\nS ${s}%\nB ${v}%`
   }
-  const { h, s, l } = roundChannels(hexToHsl(hex))
+  const { h, s, l } = roundChannels(color.hsl ?? hexToHsl(color.hex))
   return `H ${h}°\nS ${s}%\nL ${l}%`
 }
 
@@ -253,7 +253,7 @@ function Swatch({ color, kind, isAnchor, onCopy, copied }: SwatchProps) {
           <strong>{color.name}</strong>
           <span>{color.hex}</span>
         </span>
-        <span className="channel-value">{formatChannels(color.hex, kind)}</span>
+        <span className="channel-value">{formatChannels(color, kind)}</span>
       </span>
     </button>
   )
@@ -497,21 +497,21 @@ function DashboardPreview({
   )
 }
 
-function buildAllPalettes(brand: string, neutral: string) {
+function buildAllPalettes(brand: string, neutral: string, neutralHsl?: HSL) {
   return {
     brand: {
       light: generatePalette('brand', 'light', brand, neutral),
       dark: generatePalette('brand', 'dark', brand, neutral),
     },
     neutral: {
-      light: generatePalette('neutral', 'light', brand, neutral),
-      dark: generatePalette('neutral', 'dark', brand, neutral),
+      light: generatePalette('neutral', 'light', brand, neutral, neutralHsl),
+      dark: generatePalette('neutral', 'dark', brand, neutral, neutralHsl),
     },
   }
 }
 
-function palettesToCss(brand: string, neutral: string) {
-  const palettes = buildAllPalettes(brand, neutral)
+function palettesToCss(brand: string, neutral: string, neutralHsl?: HSL) {
+  const palettes = buildAllPalettes(brand, neutral, neutralHsl)
   const groups = Object.entries(palettes).flatMap(([kind, modes]) =>
     Object.entries(modes).map(([mode, colors]) => ({
       title: `${kind}-${mode}`,
@@ -606,8 +606,15 @@ function App() {
     [brandHex, mode, neutralHex],
   )
   const neutralPalette = useMemo(
-    () => generatePalette('neutral', mode, brandHex, neutralHex),
-    [brandHex, mode, neutralHex],
+    () =>
+      generatePalette(
+        'neutral',
+        mode,
+        brandHex,
+        neutralHex,
+        neutralChannels,
+      ),
+    [brandHex, mode, neutralChannels, neutralHex],
   )
 
   useEffect(
@@ -636,7 +643,7 @@ function App() {
   }
 
   const copyColor = async (kind: PaletteKind, color: PaletteColor) => {
-    const text = `${color.hex}  ${formatChannels(color.hex, kind)}`
+    const text = `${color.hex}  ${formatChannels(color, kind)}`
     if (await copyText(text, `已复制 ${color.name} · ${color.hex}`)) {
       setCopiedKey(`${kind}-${color.name}`)
       window.setTimeout(() => setCopiedKey(null), 1200)
@@ -644,7 +651,11 @@ function App() {
   }
 
   const downloadJson = () => {
-    const content = JSON.stringify(buildAllPalettes(brandHex, neutralHex), null, 2)
+    const content = JSON.stringify(
+      buildAllPalettes(brandHex, neutralHex, neutralChannels),
+      null,
+      2,
+    )
     const url = URL.createObjectURL(
       new Blob([content], { type: 'application/json;charset=utf-8' }),
     )
@@ -779,7 +790,7 @@ function App() {
                 <button
                   onClick={() =>
                     void copyText(
-                      palettesToCss(brandHex, neutralHex),
+                      palettesToCss(brandHex, neutralHex, neutralChannels),
                       '全部 CSS 变量已复制',
                     )
                   }

@@ -5,6 +5,8 @@ export interface PaletteColor {
   name: string
   hex: string
   index: number
+  hsl?: HSL
+  hsv?: HSV
 }
 
 interface RGB {
@@ -188,10 +190,28 @@ function toPalette(colors: Record<number, string>): PaletteColor[] {
   })
 }
 
-export function generateNeutralLight(baseHex: string): PaletteColor[] {
-  const colors: Record<number, HSL> = {
-    13: hexToHsl(baseHex),
-  }
+function toHslPalette(colors: Record<number, HSL>): PaletteColor[] {
+  return Array.from({ length: 13 }, (_, position) => {
+    const index = position + 1
+    const hsl = { ...colors[index] }
+    return { name: `color-${index}`, index, hex: hslToHex(hsl), hsl }
+  })
+}
+
+function toHsvPalette(colors: Record<number, HSV>): PaletteColor[] {
+  return Array.from({ length: 13 }, (_, position) => {
+    const index = position + 1
+    const hsv = { ...colors[index] }
+    return { name: `color-${index}`, index, hex: hsvToHex(hsv), hsv }
+  })
+}
+
+export function generateNeutralLight(
+  baseHex: string,
+  baseHsl?: HSL,
+): PaletteColor[] {
+  const base = baseHsl ? adjustHsl(baseHsl, {}) : hexToHsl(baseHex)
+  const colors: Record<number, HSL> = { 13: base }
   const steps: Record<number, { s: number; l: number }> = {
     12: { s: -2, l: 8 },
     11: { s: -2, l: 4 },
@@ -211,15 +231,15 @@ export function generateNeutralLight(baseHex: string): PaletteColor[] {
     colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 86) } : next
   }
 
-  const hexColors = Object.fromEntries(
-    Object.entries(colors).map(([index, color]) => [index, hslToHex(color)]),
-  ) as Record<number, string>
-  hexColors[1] = '#FFFFFF'
-  return toPalette(hexColors)
+  colors[1] = { h: base.h, s: 0, l: 100 }
+  return toHslPalette(colors)
 }
 
-export function generateNeutralDark(baseHex: string): PaletteColor[] {
-  const base = rgbToHsl(hexToRgb(baseHex))
+export function generateNeutralDark(
+  baseHex: string,
+  baseHsl?: HSL,
+): PaletteColor[] {
+  const base = baseHsl ? adjustHsl(baseHsl, {}) : hexToHsl(baseHex)
   const isMiddleHue = base.h >= 24 && base.h <= 204
   const colors: Record<number, HSL> = { 13: base }
   const earlyLightness = isMiddleHue ? [3, 3] : [4, 4]
@@ -242,11 +262,8 @@ export function generateNeutralDark(baseHex: string): PaletteColor[] {
     colors[index] = index === 5 ? { ...next, l: Math.min(next.l, 80) } : next
   }
 
-  const hexColors = Object.fromEntries(
-    Object.entries(colors).map(([index, color]) => [index, hslToHex(color)]),
-  ) as Record<number, string>
-  hexColors[1] = '#FFFFFF'
-  return toPalette(hexColors)
+  colors[1] = { h: base.h, s: 0, l: 100 }
+  return toHslPalette(colors)
 }
 
 function brandLightSaturationRamp(baseSaturation: number) {
@@ -303,10 +320,7 @@ export function generateBrandLight(baseHex: string): PaletteColor[] {
     colors[1] = { ...adjustHsv(colors[2], { v: 3 }), s: saturationRamp[3] }
   }
 
-  const hexColors = Object.fromEntries(
-    Object.entries(colors).map(([index, color]) => [index, hsvToHex(color)]),
-  ) as Record<number, string>
-  return toPalette(hexColors)
+  return toHsvPalette(colors)
 }
 
 function blend(foreground: string, background: string, alpha: number): string {
@@ -355,11 +369,12 @@ export function generatePalette(
   mode: PaletteMode,
   brandHex: string,
   neutralHex: string,
+  neutralHsl?: HSL,
 ) {
   if (kind === 'neutral') {
     return mode === 'light'
-      ? generateNeutralLight(neutralHex)
-      : generateNeutralDark(neutralHex)
+      ? generateNeutralLight(neutralHex, neutralHsl)
+      : generateNeutralDark(neutralHex, neutralHsl)
   }
   return mode === 'light'
     ? generateBrandLight(brandHex)
