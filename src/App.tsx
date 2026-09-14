@@ -331,7 +331,7 @@ function PaletteSection({
       </div>
       <p className="palette-tip">
         <span />
-        点击任意色块，复制 HEX 和 {isBrand ? 'HSB' : 'HSL'} 色值
+        点击任意色块，复制 HEX 色值
       </p>
     </section>
   )
@@ -396,8 +396,7 @@ function App() {
   }
 
   const copyColor = async (kind: PaletteKind, color: PaletteColor) => {
-    const text = `${color.hex}  ${formatChannels(color, kind)}`
-    if (await copyText(text, `已复制 ${color.name} · ${color.hex}`)) {
+    if (await copyText(color.hex, `已复制 ${color.name} · ${color.hex}`)) {
       setCopiedKey(`${kind}-${color.name}`)
       window.setTimeout(() => setCopiedKey(null), 1200)
     }
